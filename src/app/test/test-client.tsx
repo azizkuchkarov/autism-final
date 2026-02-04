@@ -1,0 +1,275 @@
+"use client";
+
+import React from "react";
+import { useRouter } from "next/navigation";
+import TestWizard from "@/components/TestWizard";
+import type { Lang } from "@/lib/i18n";
+import type { AnswersMap } from "@/lib/scoring";
+import DarkModeToggle from "@/components/DarkModeToggle";
+
+type ParentType = "mother" | "father" | "other";
+type FamilyHistory = "yes" | "no" | "unknown";
+
+export default function TestClient() {
+  const router = useRouter();
+
+  const [lang, setLang] = React.useState<Lang>("uz");
+  const [age, setAge] = React.useState<number>(4);
+  const [parentType, setParentType] = React.useState<ParentType | "">("");
+  const [familyHistory, setFamilyHistory] = React.useState<FamilyHistory | "">("");
+  const [started, setStarted] = React.useState(false);
+
+  const [errors, setErrors] = React.useState<{
+    age?: string;
+    parent?: string;
+    family?: string;
+  }>({});
+
+  // ✅ Har gal /test ga kirganda eski natijani tozalaymiz
+  React.useEffect(() => {
+    try {
+      sessionStorage.removeItem("asds_answers");
+      sessionStorage.removeItem("asds_age");
+      sessionStorage.removeItem("asds_lang");
+      sessionStorage.removeItem("asds_parent");
+      sessionStorage.removeItem("asds_family_history");
+    } catch {}
+  }, []);
+
+  function validateForm() {
+    const newErrors: typeof errors = {};
+
+    if (!age || age < 2 || age > 7) {
+      newErrors.age = lang === "ru" ? "Возраст должен быть от 2 до 7 лет." : "Yosh 2 dan 7 gacha bo'lishi kerak.";
+    }
+
+    if (!parentType) {
+      newErrors.parent = lang === "ru" ? "Пожалуйста, укажите, кто заполняет тест." : "Iltimos, testni kim to'ldirmoqda ekanligini belgilang.";
+    }
+
+    if (!familyHistory) {
+      newErrors.family = lang === "ru" ? "Пожалуйста, ответьте на вопрос о семейной истории." : "Iltimos, oila tarixi haqidagi savolga javob bering.";
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  }
+
+  function startTest() {
+    if (!validateForm()) {
+      return;
+    }
+
+    try {
+      sessionStorage.setItem("asds_age", String(age));
+      sessionStorage.setItem("asds_lang", lang);
+      sessionStorage.setItem("asds_parent", parentType);
+      sessionStorage.setItem("asds_family_history", familyHistory);
+    } catch {}
+
+    setStarted(true);
+  }
+
+  function onComplete(answers: AnswersMap) {
+    try {
+      sessionStorage.setItem("asds_answers", JSON.stringify(answers));
+    } catch {}
+
+    router.push("/result");
+  }
+
+  if (started) {
+    return <TestWizard childAgeYears={age} lang={lang} onComplete={onComplete} />;
+  }
+
+  const labels =
+    lang === "ru"
+      ? {
+          title: "Скрининг 2–7 лет",
+          subtitle: "Пожалуйста, заполните форму ниже. Это не диагноз — результат поможет понять, на что обратить внимание.",
+          ageLabel: "Возраст ребёнка (лет)",
+          parentLabel: "Кто заполняет тест?",
+          parentOptions: {
+            mother: "Мама",
+            father: "Папа",
+            other: "Другой родственник/опекун",
+          },
+          familyLabel: "Есть ли в семье люди с расстройством аутистического спектра (РАС)?",
+          familyOptions: {
+            yes: "Да",
+            no: "Нет",
+            unknown: "Не знаю / Не уверен",
+          },
+          start: "Начать тест",
+          tipTitle: "Как отвечать?",
+          tipText: "Оценивайте по поведению за последние 2–4 недели. Если сомневаетесь — выбирайте «Иногда».",
+        }
+      : {
+          title: "2–7 yosh skrining",
+          subtitle: "Iltimos, quyidagi formani to'ldiring. Bu tashxis emas — natija sizga nimaga e'tibor berishni ko'rsatadi.",
+          ageLabel: "Bolaning yoshi (yil)",
+          parentLabel: "Testni kim to'ldirmoqda?",
+          parentOptions: {
+            mother: "Ona",
+            father: "Ota",
+            other: "Boshqa qarindosh / Vasiy",
+          },
+          familyLabel: "Oilada Autizm spektr buzilishi (ASD) bilan kasallanganlar bormi?",
+          familyOptions: {
+            yes: "Ha",
+            no: "Yo'q",
+            unknown: "Bilmayman / Aniq emas",
+          },
+          start: "Testni boshlash",
+          tipTitle: "Qanday javob berish?",
+          tipText: "Oxirgi 2–4 hafta kuzatuvingiz bo'yicha belgilang. Ikki o'rtada bo'lsa — «Ba'zan» ni tanlang.",
+        };
+
+  return (
+    <div className="min-h-dvh bg-gradient-to-br from-indigo-50 via-white to-emerald-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 transition-colors duration-300 px-4 pt-10 pb-10">
+      {/* Dark Mode Toggle */}
+      <div className="fixed top-4 right-4 z-50 animate-fadeIn">
+        <DarkModeToggle />
+      </div>
+      <div className="mx-auto max-w-2xl">
+        <div className="rounded-2xl glass dark:bg-slate-800/50 p-6 md:p-8 shadow-lg ring-1 ring-slate-200/50 dark:ring-slate-700/50 hover-lift animate-fadeIn">
+          {/* Header */}
+          <div className="flex items-start justify-between gap-4 mb-6">
+            <div className="flex-1">
+              <div className="inline-flex items-center gap-2 rounded-full bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1.5 text-xs font-bold text-indigo-700 dark:text-indigo-300 ring-1 ring-indigo-100 dark:ring-indigo-800">
+                {labels.title}
+              </div>
+              <p className="mt-3 text-sm leading-relaxed text-slate-700 dark:text-slate-300">{labels.subtitle}</p>
+            </div>
+
+            {/* Lang switch */}
+            <div className="flex gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setLang("uz")}
+                className={`rounded-xl px-4 py-2 text-xs font-bold ring-1 transition-all ${
+                  lang === "uz"
+                    ? "bg-indigo-600 dark:bg-indigo-500 text-white ring-indigo-200 dark:ring-indigo-700 shadow-md"
+                    : "bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 ring-slate-200 dark:ring-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600"
+                }`}
+              >
+                UZ
+              </button>
+              <button
+                type="button"
+                onClick={() => setLang("ru")}
+                className={`rounded-xl px-4 py-2 text-xs font-bold ring-1 transition-all ${
+                  lang === "ru"
+                    ? "bg-indigo-600 dark:bg-indigo-500 text-white ring-indigo-200 dark:ring-indigo-700 shadow-md"
+                    : "bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 ring-slate-200 dark:ring-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600"
+                }`}
+              >
+                RU
+              </button>
+            </div>
+          </div>
+
+          {/* Form */}
+          <div className="space-y-6">
+            {/* Age input */}
+            <div className="rounded-xl bg-gradient-to-br from-slate-50 to-white dark:from-slate-700 dark:to-slate-800 p-5 ring-1 ring-slate-200/50 dark:ring-slate-600/50 shadow-sm">
+              <label className="block text-sm font-bold text-slate-900 dark:text-slate-100 mb-3">
+                {labels.ageLabel}
+              </label>
+              <input
+                type="number"
+                min={2}
+                max={7}
+                value={age}
+                onChange={(e) => {
+                  setAge(Number(e.target.value));
+                  setErrors((prev) => ({ ...prev, age: undefined }));
+                }}
+                className="w-full rounded-xl bg-white dark:bg-slate-700 px-4 py-3 text-base font-semibold text-slate-900 dark:text-slate-100 ring-1 ring-slate-300 dark:ring-slate-600 outline-none transition-all focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:ring-offset-1"
+              />
+              {errors.age && <div className="mt-2 text-xs font-semibold text-red-600 dark:text-red-400">{errors.age}</div>}
+            </div>
+
+            {/* Parent type */}
+            <div className="rounded-xl bg-gradient-to-br from-slate-50 to-white dark:from-slate-700 dark:to-slate-800 p-5 ring-1 ring-slate-200/50 dark:ring-slate-600/50 shadow-sm">
+              <label className="block text-sm font-bold text-slate-900 dark:text-slate-100 mb-3">
+                {labels.parentLabel}
+              </label>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {(["mother", "father", "other"] as ParentType[]).map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => {
+                      setParentType(type);
+                      setErrors((prev) => ({ ...prev, parent: undefined }));
+                    }}
+                    className={`rounded-xl px-4 py-3 text-sm font-semibold ring-1 transition-all hover-lift ${
+                      parentType === type
+                        ? "bg-indigo-600 dark:bg-indigo-500 text-white ring-indigo-200 dark:ring-indigo-700 shadow-md"
+                        : "bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 ring-slate-300 dark:ring-slate-600 hover:ring-indigo-300 dark:hover:ring-indigo-600"
+                    }`}
+                  >
+                    {labels.parentOptions[type]}
+                  </button>
+                ))}
+              </div>
+              {errors.parent && <div className="mt-2 text-xs font-semibold text-red-600 dark:text-red-400">{errors.parent}</div>}
+            </div>
+
+            {/* Family history */}
+            <div className="rounded-xl bg-gradient-to-br from-slate-50 to-white dark:from-slate-700 dark:to-slate-800 p-5 ring-1 ring-slate-200/50 dark:ring-slate-600/50 shadow-sm">
+              <label className="block text-sm font-bold text-slate-900 dark:text-slate-100 mb-3">
+                {labels.familyLabel}
+              </label>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {(["yes", "no", "unknown"] as FamilyHistory[]).map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => {
+                      setFamilyHistory(type);
+                      setErrors((prev) => ({ ...prev, family: undefined }));
+                    }}
+                    className={`rounded-xl px-4 py-3 text-sm font-semibold ring-1 transition-all hover-lift ${
+                      familyHistory === type
+                        ? "bg-indigo-600 dark:bg-indigo-500 text-white ring-indigo-200 dark:ring-indigo-700 shadow-md"
+                        : "bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 ring-slate-300 dark:ring-slate-600 hover:ring-indigo-300 dark:hover:ring-indigo-600"
+                    }`}
+                  >
+                    {labels.familyOptions[type]}
+                  </button>
+                ))}
+              </div>
+              {errors.family && <div className="mt-2 text-xs font-semibold text-red-600 dark:text-red-400">{errors.family}</div>}
+            </div>
+          </div>
+
+          {/* Tips */}
+          <div className="mt-6 rounded-xl bg-gradient-to-br from-indigo-50 to-white dark:from-indigo-900/20 dark:to-slate-800 p-4 ring-1 ring-indigo-100 dark:ring-indigo-800/50 shadow-sm">
+            <div className="text-xs font-bold text-indigo-900 dark:text-indigo-300">{labels.tipTitle}</div>
+            <p className="mt-2 text-sm leading-relaxed text-slate-700 dark:text-slate-300">{labels.tipText}</p>
+          </div>
+
+          {/* Start button */}
+          <button
+            type="button"
+            onClick={startTest}
+            className="mt-6 w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 dark:from-indigo-500 dark:to-indigo-600 px-6 py-4 text-base font-bold text-white shadow-md shadow-indigo-500/25 dark:shadow-indigo-500/40 transition-all hover:from-indigo-700 hover:to-indigo-600 dark:hover:from-indigo-600 dark:hover:to-indigo-700 hover:shadow-lg hover:shadow-indigo-500/30 dark:hover:shadow-indigo-500/50 hover:-translate-y-0.5 active:translate-y-0"
+          >
+            {labels.start}
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+            </svg>
+          </button>
+
+          <p className="mt-4 text-center text-xs text-slate-500 dark:text-slate-400">
+            {lang === "ru"
+              ? "Примечание: этот скрининг не заменяет консультацию специалиста."
+              : "Eslatma: bu skrining mutaxassis konsultatsiyasini almashtirmaydi."}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
