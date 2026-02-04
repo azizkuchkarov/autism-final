@@ -15,12 +15,14 @@ export default function TestClient() {
 
   const [lang, setLang] = React.useState<Lang>("uz");
   const [age, setAge] = React.useState<number>(4);
+  const [phone, setPhone] = React.useState<string>("+998");
   const [parentType, setParentType] = React.useState<ParentType | "">("");
   const [familyHistory, setFamilyHistory] = React.useState<FamilyHistory | "">("");
   const [started, setStarted] = React.useState(false);
 
   const [errors, setErrors] = React.useState<{
     age?: string;
+    phone?: string;
     parent?: string;
     family?: string;
   }>({});
@@ -43,6 +45,15 @@ export default function TestClient() {
       newErrors.age = lang === "ru" ? "Возраст должен быть от 2 до 7 лет." : "Yosh 2 dan 7 gacha bo'lishi kerak.";
     }
 
+    const cleaned = phone.replace(/\s+/g, "");
+    const phoneOk = /^\+998\d{9}$/.test(cleaned);
+    if (!phoneOk) {
+      newErrors.phone =
+        lang === "ru"
+          ? "Введите номер в формате +998XXXXXXXXX."
+          : "Telefon raqami +998XXXXXXXXX formatida bo'lishi kerak.";
+    }
+
     if (!parentType) {
       newErrors.parent = lang === "ru" ? "Пожалуйста, укажите, кто заполняет тест." : "Iltimos, testni kim to'ldirmoqda ekanligini belgilang.";
     }
@@ -63,6 +74,7 @@ export default function TestClient() {
     try {
       sessionStorage.setItem("asds_age", String(age));
       sessionStorage.setItem("asds_lang", lang);
+      sessionStorage.setItem("asds_phone", phone.replace(/\s+/g, ""));
       sessionStorage.setItem("asds_parent", parentType);
       sessionStorage.setItem("asds_family_history", familyHistory);
     } catch {}
@@ -88,6 +100,7 @@ export default function TestClient() {
           title: "Скрининг 2–7 лет",
           subtitle: "Пожалуйста, заполните форму ниже. Это не диагноз — результат поможет понять, на что обратить внимание.",
           ageLabel: "Возраст ребёнка (лет)",
+          phoneLabel: "Номер телефона (Узбекистан)",
           parentLabel: "Кто заполняет тест?",
           parentOptions: {
             mother: "Мама",
@@ -108,6 +121,7 @@ export default function TestClient() {
           title: "2–7 yosh skrining",
           subtitle: "Iltimos, quyidagi formani to'ldiring. Bu tashxis emas — natija sizga nimaga e'tibor berishni ko'rsatadi.",
           ageLabel: "Bolaning yoshi (yil)",
+          phoneLabel: "Telefon raqami (O‘zbekiston)",
           parentLabel: "Testni kim to'ldirmoqda?",
           parentOptions: {
             mother: "Ona",
@@ -188,6 +202,25 @@ export default function TestClient() {
                 className="w-full rounded-xl bg-white dark:bg-slate-700 px-4 py-3 text-base font-semibold text-slate-900 dark:text-slate-100 ring-1 ring-slate-300 dark:ring-slate-600 outline-none transition-all focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:ring-offset-1"
               />
               {errors.age && <div className="mt-2 text-xs font-semibold text-red-600 dark:text-red-400">{errors.age}</div>}
+            </div>
+
+            {/* Phone input */}
+            <div className="rounded-xl bg-gradient-to-br from-slate-50 to-white dark:from-slate-700 dark:to-slate-800 p-5 ring-1 ring-slate-200/50 dark:ring-slate-600/50 shadow-sm">
+              <label className="block text-sm font-bold text-slate-900 dark:text-slate-100 mb-3">
+                {labels.phoneLabel}
+              </label>
+              <input
+                type="tel"
+                inputMode="tel"
+                placeholder="+998901234567"
+                value={phone}
+                onChange={(e) => {
+                  setPhone(e.target.value);
+                  setErrors((prev) => ({ ...prev, phone: undefined }));
+                }}
+                className="w-full rounded-xl bg-white dark:bg-slate-700 px-4 py-3 text-base font-semibold text-slate-900 dark:text-slate-100 ring-1 ring-slate-300 dark:ring-slate-600 outline-none transition-all focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:ring-offset-1"
+              />
+              {errors.phone && <div className="mt-2 text-xs font-semibold text-red-600 dark:text-red-400">{errors.phone}</div>}
             </div>
 
             {/* Parent type */}

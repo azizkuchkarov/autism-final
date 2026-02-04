@@ -4,7 +4,8 @@ import React from "react";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import { DonutRisk, RadarBlocks } from "@/components/Charts";
-import { computeSummary } from "@/lib/scoring";
+import { computeSummary, type AnswerValue, type AnswersMap, type Summary } from "@/lib/scoring";
+import { QUESTIONS, type BlockId, type Direction } from "@/lib/questions";
 import DarkModeToggle from "@/components/DarkModeToggle";
 
 type AiOut = {
@@ -17,6 +18,12 @@ type AiOut = {
   urgency: string;
   next_steps: string[];
   disclaimer: string;
+};
+
+type ParentConclusion = {
+  summaryText: string;
+  strengths: string[];
+  concerns: string[];
 };
 
 function toStringArray(x: unknown): string[] {
@@ -44,6 +51,180 @@ function normalizeAi(data: any): AiOut {
   };
 }
 
+function blockLabel(id: keyof Summary["blocks"], lang: "uz" | "ru") {
+  const labels = {
+    uz: {
+      social: "Ijtimoiy",
+      speech: "Nutq",
+      repetitive: "Takroriy",
+      sensory: "Sensor",
+      emotional: "Emotsional",
+    },
+    ru: {
+      social: "Социальные",
+      speech: "Речь",
+      repetitive: "Повторяющиеся",
+      sensory: "Сенсорные",
+      emotional: "Эмоциональные",
+    },
+  };
+  return labels[lang][id];
+}
+
+function statusLabel(status: Summary["blocks"][keyof Summary["blocks"]]["status"], lang: "uz" | "ru") {
+  const isMedium = status === "O‘rtacha";
+  if (lang === "ru") {
+    if (status === "Normal") return "Норма";
+    if (isMedium) return "Средний риск";
+    return "Высокий риск";
+  }
+  if (isMedium) return "O'rtacha";
+  return status;
+}
+
+function answerLabel(value: AnswerValue, lang: "uz" | "ru") {
+  const map = {
+    uz: {
+      2: "Ha / ko'pincha",
+      1: "Ba'zan",
+      0: "Yo'q / kam",
+    },
+    ru: {
+      2: "Да / часто",
+      1: "Иногда",
+      0: "Нет / редко",
+    },
+  };
+  return map[lang][value];
+}
+
+function cleanQuestionText(text: string) {
+  return text.trim().replace(/[.\s]+$/, "");
+}
+
+function toRiskValue(direction: Direction, value: AnswerValue): AnswerValue {
+  return direction === "negative" ? value : ((2 - value) as AnswerValue);
+}
+
+function buildParentConclusion(summary: Summary, answers: AnswersMap | null, lang: "uz" | "ru"): ParentConclusion {
+  const strengths: string[] = [];
+  const concerns: string[] = [];
+
+  if (!answers) {
+    return {
+      summaryText:
+        lang === "ru"
+          ? "Данные ответов не найдены. Пожалуйста, пройдите тест заново."
+          : "Javoblar topilmadi. Iltimos, testni qayta to'ldiring.",
+      strengths: [],
+      concerns: [],
+    };
+  }
+
+  const testAnswerSuffix = lang === "ru" ? "Ответ теста" : "Testdan javob";
+
+  for (const [blockId, block] of Object.entries(summary.blocks) as [
+    keyof Summary["blocks"],
+    Summary["blocks"][keyof Summary["blocks"]]
+  ][]) {
+    const label = blockLabel(blockId, lang);
+    const status = statusLabel(block.status, lang);
+
+    const blockQuestions = QUESTIONS.filter(
+      (q) => q.block === blockId && q.bands.includes(summary.ageBand)
+    );
+
+    const riskItems = blockQuestions
+      .map((q) => {
+        const v = answers[q.id];
+        if (v === undefined) return null;
+        const risk = toRiskValue(q.direction, v);
+        if (risk < 1) return null;
+        return {
+          text: cleanQuestionText(q.text),
+          answer: `${answerLabel(v, lang)} (${testAnswerSuffix})`,
+          risk,
+          isCore: Boolean(q.isCoreFlag),
+        };
+      })
+      .filter(Boolean) as { text: string; answer: string; risk: number; isCore: boolean }[];
+
+    riskItems.sort((a, b) => (b.isCore ? 10 : 0) + b.risk - ((a.isCore ? 10 : 0) + a.risk));
+
+    const strengthItems = blockQuestions
+      .map((q) => {
+        const v = answers[q.id];
+        if (v === undefined) return null;
+        const isStrength = q.direction === "positive" ? v === 2 : v === 0;
+        if (!isStrength) return null;
+        return {
+          text: cleanQuestionText(q.text),
+          answer: `${answerLabel(v, lang)} (${testAnswerSuffix})`,
+          isCore: Boolean(q.isCoreFlag),
+        };
+      })
+      .filter(Boolean) as { text: string; answer: string; isCore: boolean }[];
+
+    strengthItems.sort((a, b) => (b.isCore ? 10 : 0) - (a.isCore ? 10 : 0));
+
+    if (block.status === "Normal") {
+      const topStrengths = strengthItems.slice(0, 2).map((i) => `${i.text}. ${i.answer}`);
+      if (topStrengths.length > 0) strengths.push(...topStrengths);
+      else
+        strengths.push(
+          lang === "ru"
+            ? `${label}: выраженных рисков не отмечено.`
+            : `${label}: aniq xavotirli belgilar kuzatilmadi.`
+        );
+    } else {
+      const topRisks = riskItems.slice(0, 2).map((i) => `${i.text}. ${i.answer}`);
+      const flagsText = topRisks.length
+        ? lang === "ru"
+          ? ` Наблюдаемые признаки: ${topRisks.join("; ")}.`
+          : ` Kuzatilgan belgilar: ${topRisks.join("; ")}.`
+        : lang === "ru"
+        ? " Наблюдаемые признаки не указаны."
+        : " Kuzatilgan belgilar topilmadi.";
+      concerns.push(`${label}: ${status}.${flagsText}`);
+    }
+  }
+
+  if (strengths.length === 0) {
+    strengths.push(
+      lang === "ru"
+        ? "Выраженных сильных сторон по ответам не выделено."
+        : "Javoblarga ko'ra aniq kuchli tomonlar ajralmadi."
+    );
+  }
+  if (concerns.length === 0) {
+    concerns.push(
+      lang === "ru"
+        ? "Явных зон риска не выявлено."
+        : "Hozircha yaqqol xavotirli yo'nalishlar ko'rinmadi."
+    );
+  }
+
+  let summaryText = "";
+  if (summary.profile === "A") {
+    summaryText =
+      lang === "ru"
+        ? "Ответы показывают показатели, близкие к возрастной норме. Риск низкий, но наблюдение полезно."
+        : "Javoblar ko'rsatkichlari yosh me'yoriga yaqin. Risk past, ammo kuzatuv foydali.";
+  } else if (summary.profile === "B") {
+    summaryText =
+      lang === "ru"
+        ? "Есть отдельные области, где требуются внимание и поддержка. Это не диагноз, но стоит обсудить результаты со специалистом."
+        : "Ba'zi yo'nalishlarda e'tibor va qo'llab-quvvatlash kerak bo'lishi mumkin. Bu tashxis emas, mutaxassis bilan maslahat foydali.";
+  } else {
+    summaryText =
+      lang === "ru"
+        ? "Сочетание ответов показывает признаки, которые могут быть ближе к аутистическому спектру. Это не диагноз, но нужна очная оценка специалиста."
+        : "Javoblar kombinatsiyasi autizm spektriga yaqin bo'lishi mumkin bo'lgan belgilarni ko'rsatadi. Bu tashxis emas, ammo mutaxassis baholashi zarur.";
+  }
+
+  return { summaryText, strengths, concerns };
+}
+
 function profileLabel(p: "A" | "B" | "C") {
   if (p === "A") return "Normaga yaqin";
   if (p === "B") return "Rivojlanish farqlari";
@@ -60,14 +241,19 @@ export default function ResultClient() {
   const [loadingAi, setLoadingAi] = React.useState(false);
   const [ai, setAi] = React.useState<AiOut | null>(null);
   const [summary, setSummary] = React.useState<ReturnType<typeof computeSummary> | null>(null);
+  const [lang, setLang] = React.useState<"uz" | "ru">("uz");
+  const [answers, setAnswers] = React.useState<AnswersMap | null>(null);
 
   React.useEffect(() => {
     const rawA = sessionStorage.getItem("asds_answers");
     const rawAge = sessionStorage.getItem("asds_age");
+    const rawLang = sessionStorage.getItem("asds_lang");
     if (!rawA || !rawAge) return;
 
-    const answers = JSON.parse(rawA);
+    const answers = JSON.parse(rawA) as AnswersMap;
     const age = Number(rawAge);
+    if (rawLang === "ru" || rawLang === "uz") setLang(rawLang);
+    setAnswers(answers);
     setSummary(computeSummary(age, answers));
   }, []);
 
@@ -101,10 +287,67 @@ export default function ResultClient() {
     if (!summary) return;
     setLoadingAi(true);
     try {
+      const aiSignals =
+        answers && summary
+          ? (() => {
+              const riskItemsByBlock: Record<BlockId, string[]> = {
+                social: [],
+                speech: [],
+                repetitive: [],
+                sensory: [],
+                emotional: [],
+              };
+              const strengthItems: string[] = [];
+
+              for (const q of QUESTIONS.filter((x) => x.bands.includes(summary.ageBand))) {
+                const v = answers[q.id];
+                if (v === undefined) continue;
+                const itemText = `${cleanQuestionText(q.text)}. ${answerLabel(v, lang)} (${
+                  lang === "ru" ? "Ответ теста" : "Testdan javob"
+                })`;
+                const risk = toRiskValue(q.direction, v);
+                if (risk >= 1) riskItemsByBlock[q.block].push(itemText);
+                const isStrength = q.direction === "positive" ? v === 2 : v === 0;
+                if (isStrength) strengthItems.push(itemText);
+              }
+
+              return {
+                profile: summary.profile,
+                levelScore: summary.levelScore,
+                socialCoreRedFlags: summary.socialCoreRedFlags,
+                blockStatuses: {
+                  social: summary.blocks.social.status,
+                  speech: summary.blocks.speech.status,
+                  repetitive: summary.blocks.repetitive.status,
+                  sensory: summary.blocks.sensory.status,
+                  emotional: summary.blocks.emotional.status,
+                },
+                riskItemsByBlock: {
+                  social: riskItemsByBlock.social.slice(0, 3),
+                  speech: riskItemsByBlock.speech.slice(0, 3),
+                  repetitive: riskItemsByBlock.repetitive.slice(0, 3),
+                  sensory: riskItemsByBlock.sensory.slice(0, 3),
+                  emotional: riskItemsByBlock.emotional.slice(0, 3),
+                },
+                strengthItems: strengthItems.slice(0, 5),
+              };
+            })()
+          : {
+              profile: summary.profile,
+              levelScore: summary.levelScore,
+              socialCoreRedFlags: summary.socialCoreRedFlags,
+              blockStatuses: {
+                social: summary.blocks.social.status,
+                speech: summary.blocks.speech.status,
+                repetitive: summary.blocks.repetitive.status,
+                sensory: summary.blocks.sensory.status,
+                emotional: summary.blocks.emotional.status,
+              },
+            };
       const res = await fetch("/api/ai-explain", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(summary),
+        body: JSON.stringify({ ...summary, aiSignals, lang }),
       });
       const data = await res.json();
       setAi(normalizeAi(data));
@@ -127,6 +370,7 @@ export default function ResultClient() {
   }
 
   const chip = profileChipStyle(summary.profile);
+  const parentConclusion = buildParentConclusion(summary, answers, lang);
   const radar = [
     { label: "Ijtimoiy", value: summary.blocks.social.score },
     { label: "Nutq", value: summary.blocks.speech.score },
@@ -184,6 +428,29 @@ export default function ResultClient() {
               <div className="text-base font-bold text-slate-900 dark:text-slate-100 mb-2">Rivojlanish profili</div>
               <p className="mt-1.5 text-xs text-slate-600 dark:text-slate-400">Yuqori qiymat — shu sohada yordam ehtiyoji ko'proq bo'lishi mumkin.</p>
               <RadarBlocks points={radar} />
+            </div>
+
+            <div className="rounded-xl bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-700 p-5 ring-1 ring-slate-200/50 dark:ring-slate-700/50 shadow-sm hover-lift">
+              <div className="text-base font-bold text-slate-900 dark:text-slate-100 mb-2">
+                {lang === "ru" ? "Вывод по ответам родителей" : "Ota-ona javoblari bo'yicha xulosa"}
+              </div>
+              <Section
+                title={lang === "ru" ? "Общий вывод" : "Umumiy xulosa"}
+                items={[parentConclusion.summaryText]}
+              />
+              <Section
+                title={lang === "ru" ? "Сильные стороны" : "Kuchli tomonlar"}
+                items={parentConclusion.strengths}
+              />
+              <Section
+                title={lang === "ru" ? "Зоны внимания" : "E'tibor talab qiladigan yo'nalishlar"}
+                items={parentConclusion.concerns}
+              />
+              <p className="mt-3 rounded-xl bg-gradient-to-br from-amber-50 to-white dark:from-amber-900/20 dark:to-slate-800 p-3.5 text-xs text-slate-700 dark:text-slate-300 ring-1 ring-amber-200/50 dark:ring-amber-800/50 shadow-sm">
+                {lang === "ru"
+                  ? "Примечание: это скрининг, не диагноз. Итоговая оценка возможна только при очной консультации."
+                  : "Eslatma: bu skrining, tashxis emas. Yakuniy baho faqat yuzma-yuz konsultatsiyada beriladi."}
+              </p>
             </div>
 
             <div className="rounded-xl bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-700 p-5 ring-1 ring-slate-200/50 dark:ring-slate-700/50 shadow-sm hover-lift">

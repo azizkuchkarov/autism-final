@@ -61,6 +61,109 @@ function normalize(parsed: any): AiNormalized {
   return out;
 }
 
+function flattenRiskItems(aiSignals: any): string[] {
+  const risk = aiSignals?.riskItemsByBlock;
+  if (!risk || typeof risk !== "object") return [];
+  const all: string[] = [];
+  for (const key of Object.keys(risk)) {
+    const items = risk[key];
+    if (Array.isArray(items)) {
+      for (const item of items) {
+        if (typeof item === "string" && item.trim()) all.push(item.trim());
+      }
+    }
+  }
+  return all;
+}
+
+function applySignalsFilters(out: AiNormalized, summary: any): AiNormalized {
+  const aiSignals = summary?.aiSignals;
+  if (!aiSignals || typeof aiSignals !== "object") return out;
+
+  const strengths = Array.isArray(aiSignals.strengthItems)
+    ? aiSignals.strengthItems.map(String).filter(Boolean)
+    : [];
+  const riskItems = flattenRiskItems(aiSignals);
+
+  return {
+    ...out,
+    strengths,
+    challenges: riskItems.slice(0, 5),
+    why_possible: riskItems.slice(0, 3),
+    why_not_sure: strengths.slice(0, 3),
+  };
+}
+
+function blockLabel(id: string, lang: "uz" | "ru") {
+  const labels = {
+    uz: {
+      social: "Ijtimoiy",
+      speech: "Nutq",
+      repetitive: "Takroriy",
+      sensory: "Sensor",
+      emotional: "Emotsional",
+    },
+    ru: {
+      social: "Социальные",
+      speech: "Речь",
+      repetitive: "Повторяющиеся",
+      sensory: "Сенсорные",
+      emotional: "Эмоциональные",
+    },
+  };
+  return (labels as any)[lang]?.[id] ?? id;
+}
+
+function statusLabel(status: string, lang: "uz" | "ru") {
+  const isMedium = status === "O‘rtacha";
+  if (lang === "ru") {
+    if (status === "Normal") return "Норма";
+    if (isMedium) return "Средний риск";
+    return "Высокий риск";
+  }
+  if (isMedium) return "O'rtacha";
+  return status;
+}
+
+function buildStrictSummary(summary: any): string | null {
+  if (!summary || typeof summary !== "object") return null;
+  const lang: "uz" | "ru" = summary.lang === "ru" ? "ru" : "uz";
+  const profile: "A" | "B" | "C" | undefined = summary.profile;
+  const age = summary.childAgeYears;
+  const blocks = summary.blocks ?? {};
+
+  const blockLines: string[] = [];
+  for (const key of ["social", "speech", "repetitive", "sensory", "emotional"]) {
+    const b = blocks?.[key];
+    if (!b || !b.status) continue;
+    if (b.status !== "Normal") {
+      blockLines.push(`${blockLabel(key, lang)}: ${statusLabel(b.status, lang)}`);
+    }
+  }
+
+  const areasText = blockLines.length > 0 ? blockLines.join(", ") : null;
+
+  if (profile === "A") {
+    return lang === "ru"
+      ? `Результаты скрининга указывают на показатели, близкие к возрастной норме${age ? ` (возраст: ${age})` : ""}. Явных зон риска не выявлено. Наблюдение в динамике остаётся полезным.`
+      : `Skrining natijalari yosh me'yoriga yaqin ko'rsatkichlarni ko'rsatadi${age ? ` (yoshi: ${age})` : ""}. Yaqqol xavotirli yo'nalishlar aniqlanmadi. Dinamik kuzatuv foydali.`;
+  }
+
+  if (profile === "B") {
+    return lang === "ru"
+      ? `Скрининг показывает отдельные зоны, требующие внимания${areasText ? `: ${areasText}` : ""}. Это не диагноз, но имеет смысл обсудить результаты со специалистом.`
+      : `Skriningda ayrim yo'nalishlarda e'tibor talab qilinadi${areasText ? `: ${areasText}` : ""}. Bu tashxis emas, natijalarni mutaxassis bilan muhokama qilish foydali.`;
+  }
+
+  if (profile === "C") {
+    return lang === "ru"
+      ? `Сочетание ответов показывает признаки, которые могут быть ближе к аутистическому спектру${areasText ? `: ${areasText}` : ""}. Это не диагноз, необходима очная оценка специалиста.`
+      : `Javoblar kombinatsiyasi autizm spektriga yaqin bo'lishi mumkin bo'lgan belgilarni ko'rsatadi${areasText ? `: ${areasText}` : ""}. Bu tashxis emas, mutaxassisning yuzma-yuz baholashi zarur.`;
+  }
+
+  return null;
+}
+
 export async function POST(req: Request) {
   try {
     const apiKey = process.env.OPENAI_API_KEY;
@@ -96,6 +199,17 @@ QAT’IY QOIDALAR:
    - why_possible: faqat riskni oshiradigan dalillar (social core red flags + repetitiv + echolalia + rigidlik + meltdown).
    - why_not_sure: faqat riskni kamaytiradigan dalillar (social kuchli, ismga javob bor, ko‘z kontakt bor, joint attention bor).
    - Ularni ARALASHTIRMA.
+
+5) SUMMARY ichidagi ma'lumotlardan foydalan:
+   - blocks.*.status va blocks.*.topFlags asosida 2–3 ta aniq dalil yoz.
+   - agar "aiSignals" kelsa, uni ishonchli kalit signal sifatida ishlat.
+   - summary.levelScore va summary.socialCoreRedFlags ga mos tavsiya ber.
+   - aiSignals.riskItemsByBlock va aiSignals.strengthItems bo'lsa, ulardan MISOL keltir.
+
+6) QAT'IY FILTR:
+   - strengths va why_not_sure faqat aiSignals.strengthItems ichidan bo'lsin.
+   - challenges va why_possible faqat aiSignals.riskItemsByBlock ichidan bo'lsin.
+   - agar aiSignals bo'lsa, u yerdan tashqaridagi savollarni yozma.
 
 OUTPUT: faqat quyidagi JSON formatda qaytar:
 {
@@ -149,7 +263,16 @@ Talablar:
 
     try {
       const parsed = JSON.parse(content);
-      return NextResponse.json(normalize(parsed), { status: 200 });
+      const normalized = normalize(parsed);
+      const filtered = applySignalsFilters(normalized, summary);
+      const strictSummary = buildStrictSummary(summary);
+      return NextResponse.json(
+        {
+          ...filtered,
+          summary: strictSummary ?? filtered.summary,
+        },
+        { status: 200 }
+      );
     } catch {
       return NextResponse.json(fallbackAi("AI javobi JSON formatda kelmadi. Qayta bosing."), { status: 200 });
     }
