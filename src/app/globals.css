@@ -160,3 +160,21 @@ html {
 .dark ::-webkit-scrollbar-thumb:hover {
   background: rgba(148, 163, 184, 0.5);
 }
+
+/* PDF-safe overrides for html2canvas (avoid oklab/oklch parsing) */
+.pdf-safe,
+.pdf-safe * {
+  color: #0f172a !important;
+  background-color: #ffffff !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  border-color: #e2e8f0 !important;
+}
+
+.pdf-safe svg,
+.pdf-safe svg * {
+  color: #0f172a !important;
+  stroke: #0f172a !important;
+  fill: #0f172a !important;
+}

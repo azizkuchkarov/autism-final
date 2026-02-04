@@ -26,6 +26,8 @@ export default function TestClient() {
     parent?: string;
     family?: string;
   }>({});
+  const ages = React.useMemo(() => [2, 3, 4, 5, 6, 7], []);
+  const agePickerRef = React.useRef<HTMLDivElement | null>(null);
 
   // ✅ Har gal /test ga kirganda eski natijani tozalaymiz
   React.useEffect(() => {
@@ -36,6 +38,15 @@ export default function TestClient() {
       sessionStorage.removeItem("asds_parent");
       sessionStorage.removeItem("asds_family_history");
     } catch {}
+  }, []);
+
+  React.useEffect(() => {
+    const idx = ages.indexOf(age);
+    if (agePickerRef.current && idx >= 0) {
+      agePickerRef.current.scrollTop = idx * 48;
+    }
+    // Only run on mount for initial alignment
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function validateForm() {
@@ -190,17 +201,47 @@ export default function TestClient() {
               <label className="block text-sm font-bold text-slate-900 dark:text-slate-100 mb-3">
                 {labels.ageLabel}
               </label>
-              <input
-                type="number"
-                min={2}
-                max={7}
-                value={age}
-                onChange={(e) => {
-                  setAge(Number(e.target.value));
-                  setErrors((prev) => ({ ...prev, age: undefined }));
-                }}
-                className="w-full rounded-xl bg-white dark:bg-slate-700 px-4 py-3 text-base font-semibold text-slate-900 dark:text-slate-100 ring-1 ring-slate-300 dark:ring-slate-600 outline-none transition-all focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:ring-offset-1"
-              />
+              <div className="relative">
+                <div className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-b from-white/90 via-white/10 to-white/90 dark:from-slate-900/70 dark:via-slate-800/10 dark:to-slate-900/70" />
+                <div className="pointer-events-none absolute left-0 right-0 top-1/2 -translate-y-1/2 h-12 rounded-xl border border-indigo-200/70 dark:border-indigo-500/30 bg-white/60 dark:bg-slate-900/40 shadow-inner" />
+                <div
+                  ref={agePickerRef}
+                  onScroll={(e) => {
+                    const top = e.currentTarget.scrollTop;
+                    const idx = Math.round(top / 48);
+                    const nextAge = ages[idx];
+                    if (nextAge && nextAge !== age) {
+                      setAge(nextAge);
+                      setErrors((prev) => ({ ...prev, age: undefined }));
+                    }
+                  }}
+                  className="relative h-40 overflow-y-auto snap-y snap-mandatory rounded-2xl bg-white/70 dark:bg-slate-900/40 ring-1 ring-slate-200/60 dark:ring-slate-600/50 shadow-sm"
+                >
+                  <div className="py-6">
+                    {ages.map((n) => {
+                      const active = n === age;
+                      return (
+                        <button
+                          key={n}
+                          type="button"
+                          onClick={() => {
+                            setAge(n);
+                            setErrors((prev) => ({ ...prev, age: undefined }));
+                            if (agePickerRef.current) agePickerRef.current.scrollTop = ages.indexOf(n) * 48;
+                          }}
+                          className={`mx-auto flex h-12 w-full items-center justify-center snap-center text-lg font-semibold transition-all ${
+                            active
+                              ? "text-indigo-700 dark:text-indigo-300"
+                              : "text-slate-500 dark:text-slate-400"
+                          }`}
+                        >
+                          {n}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
               {errors.age && <div className="mt-2 text-xs font-semibold text-red-600 dark:text-red-400">{errors.age}</div>}
             </div>
 
@@ -239,8 +280,8 @@ export default function TestClient() {
                     }}
                     className={`rounded-xl px-4 py-3 text-sm font-semibold ring-1 transition-all hover-lift ${
                       parentType === type
-                        ? "bg-indigo-600 dark:bg-indigo-500 text-white ring-indigo-200 dark:ring-indigo-700 shadow-md"
-                        : "bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 ring-slate-300 dark:ring-slate-600 hover:ring-indigo-300 dark:hover:ring-indigo-600"
+                        ? "bg-gradient-to-r from-indigo-600 to-indigo-500 dark:from-indigo-500 dark:to-indigo-600 text-white ring-indigo-200/80 dark:ring-indigo-700/80 shadow-lg shadow-indigo-500/30"
+                        : "bg-white/80 dark:bg-slate-800/70 text-slate-700 dark:text-slate-300 ring-slate-300/80 dark:ring-slate-600/70 hover:ring-indigo-300/70 dark:hover:ring-indigo-500/70"
                     }`}
                   >
                     {labels.parentOptions[type]}
@@ -266,8 +307,8 @@ export default function TestClient() {
                     }}
                     className={`rounded-xl px-4 py-3 text-sm font-semibold ring-1 transition-all hover-lift ${
                       familyHistory === type
-                        ? "bg-indigo-600 dark:bg-indigo-500 text-white ring-indigo-200 dark:ring-indigo-700 shadow-md"
-                        : "bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 ring-slate-300 dark:ring-slate-600 hover:ring-indigo-300 dark:hover:ring-indigo-600"
+                        ? "bg-gradient-to-r from-indigo-600 to-indigo-500 dark:from-indigo-500 dark:to-indigo-600 text-white ring-indigo-200/80 dark:ring-indigo-700/80 shadow-lg shadow-indigo-500/30"
+                        : "bg-white/80 dark:bg-slate-800/70 text-slate-700 dark:text-slate-300 ring-slate-300/80 dark:ring-slate-600/70 hover:ring-indigo-300/70 dark:hover:ring-indigo-500/70"
                     }`}
                   >
                     {labels.familyOptions[type]}
@@ -288,7 +329,7 @@ export default function TestClient() {
           <button
             type="button"
             onClick={startTest}
-            className="mt-6 w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 dark:from-indigo-500 dark:to-indigo-600 px-6 py-4 text-base font-bold text-white shadow-md shadow-indigo-500/25 dark:shadow-indigo-500/40 transition-all hover:from-indigo-700 hover:to-indigo-600 dark:hover:from-indigo-600 dark:hover:to-indigo-700 hover:shadow-lg hover:shadow-indigo-500/30 dark:hover:shadow-indigo-500/50 hover:-translate-y-0.5 active:translate-y-0"
+            className="mt-6 w-full inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-indigo-600 dark:from-indigo-500 dark:via-indigo-400 dark:to-indigo-600 px-6 py-4 text-base font-bold text-white shadow-xl shadow-indigo-500/30 dark:shadow-indigo-500/40 transition-all hover:from-indigo-700 hover:via-indigo-600 hover:to-indigo-700 dark:hover:from-indigo-600 dark:hover:via-indigo-500 dark:hover:to-indigo-700 hover:shadow-2xl hover:shadow-indigo-500/40 hover:-translate-y-0.5 active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
           >
             {labels.start}
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

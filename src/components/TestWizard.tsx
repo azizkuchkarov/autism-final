@@ -2,7 +2,7 @@
 
 import React from "react";
 import { QUESTIONS, BLOCKS, type BlockId } from "@/lib/questions";
-import { computeSummary, type AnswersMap } from "@/lib/scoring";
+import { type AnswersMap } from "@/lib/scoring";
 import BlockIntroLoader from "@/components/BlockIntroLoader";
 import { tBlock, type Lang } from "@/lib/i18n";
 import SaveProgress, { loadProgress } from "@/components/SaveProgress";
@@ -27,6 +27,7 @@ export default function TestWizard({ childAgeYears, lang, onComplete }: Props) {
   const [introBlock, setIntroBlock] = React.useState<BlockId>("social");
   const [showBlockComplete, setShowBlockComplete] = React.useState(false);
   const [completedBlock, setCompletedBlock] = React.useState<BlockId | null>(null);
+  const [showExplain, setShowExplain] = React.useState(false);
 
   const hasShownFirstIntroRef = React.useRef(false);
   const lastBlockRef = React.useRef<BlockId | null>(null);
@@ -56,6 +57,10 @@ export default function TestWizard({ childAgeYears, lang, onComplete }: Props) {
       return;
     }
   }, [q.block]);
+
+  React.useEffect(() => {
+    setShowExplain(false);
+  }, [q.id]);
 
   /** ===== INTRO RENDER ===== */
   if (showIntro) {
@@ -241,8 +246,32 @@ export default function TestWizard({ childAgeYears, lang, onComplete }: Props) {
           <div className="text-base font-bold leading-relaxed text-slate-900 dark:text-slate-100 mb-5">
             {q.text}
           </div>
+          <div className="rounded-xl bg-indigo-50/70 dark:bg-indigo-900/20 p-4 ring-1 ring-indigo-100/70 dark:ring-indigo-800/40 shadow-sm">
+            <div className="text-xs font-bold text-indigo-900 dark:text-indigo-300 mb-1">Misol</div>
+            <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">{q.example}</p>
+            <button
+              type="button"
+              onClick={() => setShowExplain((v) => !v)}
+              className="mt-3 inline-flex items-center gap-2 rounded-lg bg-white/90 dark:bg-slate-800/80 px-3 py-1.5 text-xs font-semibold text-indigo-700 dark:text-indigo-300 ring-1 ring-indigo-200/70 dark:ring-indigo-700/60 shadow-sm transition-all hover:bg-white dark:hover:bg-slate-800"
+            >
+              {showExplain ? "Izohni yopish" : "Izoh"}
+              <svg
+                className={`h-3.5 w-3.5 transition-transform ${showExplain ? "rotate-180" : ""}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {showExplain && (
+              <div className="mt-3 rounded-lg bg-white/80 dark:bg-slate-900/60 p-3 text-sm text-slate-700 dark:text-slate-300 ring-1 ring-indigo-100/60 dark:ring-indigo-800/40">
+                {q.explain}
+              </div>
+            )}
+          </div>
 
-          <div className="grid gap-3">
+          <div className="grid gap-3 mt-4">
             <Answer label={labels.yes} active={currentValue === 2} onClick={() => setAnswer(2)} />
             <Answer label={labels.sometimes} active={currentValue === 1} onClick={() => setAnswer(1)} />
             <Answer label={labels.no} active={currentValue === 0} onClick={() => setAnswer(0)} />
@@ -255,7 +284,7 @@ export default function TestWizard({ childAgeYears, lang, onComplete }: Props) {
             type="button"
             onClick={prev}
             disabled={idx === 0}
-            className="flex-1 rounded-xl bg-white dark:bg-slate-700 px-4 py-3 text-sm font-bold text-slate-700 dark:text-slate-300 ring-1 ring-slate-300 dark:ring-slate-600 transition-all hover:bg-slate-50 dark:hover:bg-slate-600 hover:ring-slate-400 dark:hover:ring-slate-500 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="flex-1 rounded-2xl bg-white/80 dark:bg-slate-800/70 px-4 py-3 text-sm font-bold text-slate-700 dark:text-slate-300 ring-1 ring-slate-300/70 dark:ring-slate-600/70 shadow-sm transition-all hover:bg-white hover:shadow-md hover:ring-indigo-300/60 dark:hover:bg-slate-800 dark:hover:ring-indigo-500/60 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {labels.back}
           </button>
@@ -269,7 +298,7 @@ export default function TestWizard({ childAgeYears, lang, onComplete }: Props) {
                 next();
               }
             }}
-            className="flex-1 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-500 dark:from-indigo-500 dark:to-indigo-600 px-4 py-3 text-sm font-bold text-white shadow-md shadow-indigo-500/25 dark:shadow-indigo-500/40 transition-all hover:from-indigo-700 hover:to-indigo-600 dark:hover:from-indigo-600 dark:hover:to-indigo-700 hover:shadow-lg"
+            className="flex-1 rounded-2xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-indigo-600 dark:from-indigo-500 dark:via-indigo-400 dark:to-indigo-600 px-4 py-3 text-sm font-bold text-white shadow-xl shadow-indigo-500/30 dark:shadow-indigo-500/40 transition-all hover:from-indigo-700 hover:via-indigo-600 hover:to-indigo-700 dark:hover:from-indigo-600 dark:hover:via-indigo-500 dark:hover:to-indigo-700 hover:shadow-2xl hover:shadow-indigo-500/40"
           >
             {isLastQuestionInBlock && isLastBlock
               ? labels.showResults
@@ -292,10 +321,10 @@ function Answer({ label, active, onClick }: { label: string; active: boolean; on
     <button
       type="button"
       onClick={onClick}
-      className={`w-full rounded-xl px-4 py-3.5 text-left text-sm font-semibold ring-1 transition-all hover-lift ${
+      className={`w-full rounded-2xl px-4 py-3.5 text-left text-sm font-semibold ring-1 transition-all hover-lift ${
         active
-          ? "bg-gradient-to-r from-indigo-600 to-indigo-500 dark:from-indigo-500 dark:to-indigo-600 text-white ring-indigo-200 dark:ring-indigo-700 shadow-md shadow-indigo-500/20 dark:shadow-indigo-500/40 scale-105"
-          : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 ring-slate-300 dark:ring-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 hover:ring-slate-400 dark:hover:ring-slate-500"
+          ? "bg-gradient-to-r from-indigo-600 via-indigo-500 to-indigo-600 dark:from-indigo-500 dark:via-indigo-400 dark:to-indigo-600 text-white ring-indigo-200/80 dark:ring-indigo-700/80 shadow-xl shadow-indigo-500/30 dark:shadow-indigo-500/40 scale-[1.02]"
+          : "bg-white/80 dark:bg-slate-800/70 text-slate-700 dark:text-slate-300 ring-slate-300/80 dark:ring-slate-600/70 hover:bg-white hover:ring-indigo-300/60 dark:hover:bg-slate-800 dark:hover:ring-indigo-500/60"
       }`}
     >
       {label}

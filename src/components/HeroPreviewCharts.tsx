@@ -25,7 +25,7 @@ export default function HeroPreviewCharts() {
     { label: "Nutq", value: 14 },
     { label: "Takroriy", value: 8 },
     { label: "Sensor", value: 10 },
-    { label: "Emots.", value: 7 },
+    { label: "O‘yin", value: 7 },
   ];
 
   const bars = [
@@ -33,7 +33,7 @@ export default function HeroPreviewCharts() {
     { label: "Nutq", v: 14 },
     { label: "Takroriy", v: 8 },
     { label: "Sensor", v: 10 },
-    { label: "Emotsional", v: 7 },
+    { label: "O‘yin", v: 7 },
   ];
 
   return (
